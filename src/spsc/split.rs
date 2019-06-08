@@ -84,13 +84,25 @@ macro_rules! impl_ {
                 return head != tail;
             }
 
+            /// Returns the item in the front of the queue without dequeuing, or `None` if the queue is empty
+            pub fn peek(&mut self) -> Option<T> {
+                let head = unsafe { self.rb.as_ref().0.head.load_relaxed() };
+                let tail = unsafe { self.rb.as_ref().0.tail.load_acquire() }; // ▼
+
+                if head != tail {
+                    Some(unsafe { self._dequeue(head, false) }) // ▲
+                } else {
+                    None
+                }
+            }
+
             /// Returns the item in the front of the queue, or `None` if the queue is empty
             pub fn dequeue(&mut self) -> Option<T> {
                 let head = unsafe { self.rb.as_ref().0.head.load_relaxed() };
                 let tail = unsafe { self.rb.as_ref().0.tail.load_acquire() }; // ▼
 
                 if head != tail {
-                    Some(unsafe { self._dequeue(head) }) // ▲
+                    Some(unsafe { self._dequeue(head, true) }) // ▲
                 } else {
                     None
                 }
@@ -104,10 +116,10 @@ macro_rules! impl_ {
             pub unsafe fn dequeue_unchecked(&mut self) -> T {
                 let head = self.rb.as_ref().0.head.load_relaxed();
                 debug_assert_ne!(head, self.rb.as_ref().0.tail.load_acquire());
-                self._dequeue(head) // ▲
+                self._dequeue(head, true) // ▲
             }
 
-            unsafe fn _dequeue(&mut self, head: $uxx) -> T {
+            unsafe fn _dequeue(&mut self, head: $uxx, consume: bool) -> T {
                 let rb = self.rb.as_ref();
 
                 let cap = rb.capacity();
@@ -115,7 +127,9 @@ macro_rules! impl_ {
                 let item = (rb.0.buffer.as_ptr() as *const T)
                     .add(usize::from(head % cap))
                     .read();
-                rb.0.head.store_release(head.wrapping_add(1)); // ▲
+                if !consume {
+                  rb.0.head.store_release(head.wrapping_add(1)); // ▲
+                }
                 item
             }
         }

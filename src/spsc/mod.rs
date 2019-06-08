@@ -341,6 +341,23 @@ macro_rules! impl_ {
             N: ArrayLength<T>,
             C: sealed::XCore,
         {
+            /// Returns the item in the front of the queue without dequeuing, or `None` if the queue is empty
+            pub fn peek(&mut self) -> Option<T> {
+                let cap = self.capacity();
+
+                let head = self.0.head.get_mut();
+                let tail = self.0.tail.get_mut();
+
+                let p = self.0.buffer.as_ptr();
+
+                if *head != *tail {
+                    let item = unsafe { (p as *const T).add(usize::from(*head % cap)).read() };
+                    Some(item)
+                } else {
+                    None
+                }
+            }
+
             /// Returns the item in the front of the queue, or `None` if the queue is empty
             pub fn dequeue(&mut self) -> Option<T> {
                 let cap = self.capacity();
